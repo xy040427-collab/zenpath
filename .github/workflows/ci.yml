@@ -1,0 +1,170 @@
+name: ZENPATH CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  repository-safety:
+    name: Repository Safety
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for forbidden tracked files
+        run: |
+          echo "=== Checking for files that should NOT be in Git ==="
+          VIOLATIONS=0
+
+          # Sensitive files
+          for pattern in '.env' '.env.*'; do
+            FOUND=$(git ls-files | grep -E "^\.env($|\.)" | grep -v '\.env\.example$' || true)
+            if [ -n "$FOUND" ]; then
+              echo "❌ SENSITIVE: $FOUND"
+              VIOLATIONS=$((VIOLATIONS + 1))
+            fi
+          done
+
+          # Database files
+          DB_FILES=$(git ls-files | grep -E '\.(db|sqlite|sqlite3)$' || true)
+          if [ -n "$DB_FILES" ]; then
+            echo "❌ DATABASE: $DB_FILES"
+            VIOLATIONS=$((VIOLATIONS + 1))
+          fi
+
+          # Large data directories
+          for dir in 'data/' 'rag_output/' 'backend/rag_output/' 'assets/logos/' 'frontend/public/logos/' 'frontend/public/urongda-logos/'; do
+            FOUND=$(git ls-files | grep "^${dir}" || true)
+            if [ -n "$FOUND" ]; then
+              echo "❌ LARGE DATA: ${dir}*"
+              VIOLATIONS=$((VIOLATIONS + 1))
+            fi
+          done
+
+          # Build artifacts and dependencies
+          for dir in 'node_modules/' 'frontend/node_modules/' 'frontend/dist/' 'dist/'; do
+            FOUND=$(git ls-files | grep "^${dir}" || true)
+            if [ -n "$FOUND" ]; then
+              echo "❌ ARTIFACT: ${dir}*"
+              VIOLATIONS=$((VIOLATIONS + 1))
+            fi
+          done
+
+          # Real deployment config
+          DEPLOY=$(git ls-files | grep '^zenpath-nginx\.conf$' || true)
+          if [ -n "$DEPLOY" ]; then
+            echo "❌ DEPLOY CONFIG: zenpath-nginx.conf"
+            VIOLATIONS=$((VIOLATIONS + 1))
+          fi
+
+          # Binary documents
+          BINARY=$(git ls-files | grep -E '\.(docx|pdf|pptx|zip)$' || true)
+          if [ -n "$BINARY" ]; then
+            echo "❌ BINARY: $BINARY"
+            VIOLATIONS=$((VIOLATIONS + 1))
+          fi
+
+          if [ "$VIOLATIONS" -gt 0 ]; then
+            echo ""
+            echo "❌ Found $VIOLATIONS violation(s). Fix .gitignore and remove tracked files."
+            exit 1
+          fi
+          echo "✅ No forbidden files tracked."
+
+  required-files:
+    name: Required Files
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check required infrastructure files
+        run: |
+          echo "=== Checking required files ==="
+          MISSING=0
+
+          REQUIRED_FILES=(
+            "docs/PROJECT_RULES.md"
+            "docs/DO_NOT_CHANGE.md"
+            "docs/STYLE_GUIDE.md"
+            "docs/TESTING_GUIDE.md"
+            "docs/SECURITY_POLICY.md"
+            "docs/AI_AGENT_WORKFLOW.md"
+            "docs/RELEASE_GUIDE.md"
+            "docs/REPORT_TEMPLATE.md"
+            "docs/GOLDEN_PATH.md"
+            ".github/pull_request_template.md"
+            ".github/ISSUE_TEMPLATE/ai_agent_task.md"
+            ".github/ISSUE_TEMPLATE/bug_fix.md"
+            ".github/ISSUE_TEMPLATE/feature_request.md"
+            "specs/example-feature/requirements.md"
+            "specs/example-feature/design.md"
+            "specs/example-feature/tasks.md"
+            "specs/example-feature/acceptance.md"
+            "deploy/nginx/zenpath-nginx.example.conf"
+          )
+
+          for f in "${REQUIRED_FILES[@]}"; do
+            if [ ! -f "$f" ]; then
+              echo "❌ MISSING: $f"
+              MISSING=$((MISSING + 1))
+            else
+              echo "✅ $f"
+            fi
+          done
+
+          if [ "$MISSING" -gt 0 ]; then
+            echo ""
+            echo "❌ $MISSING required file(s) missing."
+            exit 1
+          fi
+          echo ""
+          echo "✅ All required files present."
+
+  frontend-build:
+    name: Frontend Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+
+      - name: Build
+        run: npm run build
+
+  backend-python-check:
+    name: Backend Python Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+
+      - name: Compile check
+        run: |
+          python -m compileall backend/app backend/rag scripts tests -q
+          echo "✅ Python compile check passed."
