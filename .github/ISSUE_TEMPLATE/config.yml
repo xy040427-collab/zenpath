@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: "择境 ZENPATH 项目规则"
+    url: "https://github.com/OWNER/REPO/blob/main/docs/PROJECT_RULES.md"
+    about: "开始任务前请先阅读项目规则"
+  - name: "AI Agent 工作流"
+    url: "https://github.com/OWNER/REPO/blob/main/docs/AI_AGENT_WORKFLOW.md"
+    about: "AI Agent 必须按标准工作流执行"
+  - name: "禁止修改文件清单"
+    url: "https://github.com/OWNER/REPO/blob/main/docs/DO_NOT_CHANGE.md"
+    about: "修改文件前请查阅禁止清单"
