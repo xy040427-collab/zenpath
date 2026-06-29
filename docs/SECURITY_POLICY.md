@@ -27,9 +27,9 @@
 
 **代码中只允许 `os.environ.get("KEY")` 或 pydantic-settings 读取，不允许硬编码。**
 
-### 已知注意
+### 历史安全事件
 
-`backend/app/services/school_detail_generator.py` 中有 `DEEPSEEK_API_KEY="***"` 占位符，非真实密钥，但建议后续改为从环境变量读取。
+`backend/app/services/school_detail_generator.py` 在早期本地 commit 中曾出现硬编码 API key。该问题已通过 `git-filter-repo` 清理历史，并将代码改为从环境变量读取。任何硬编码 API key 均视为严重安全问题。即使历史已清理，相关 key 仍必须在平台控制台轮换。
 
 ---
 
@@ -152,3 +152,15 @@
 2. **报告**安全问题详情
 3. **不要尝试自己修复**安全漏洞
 4. **等待人工处理**
+
+---
+
+## 十、历史密钥事件处理原则
+
+1. 发现硬编码 key 后必须停止业务开发；
+2. 必须先移除当前 HEAD 中的 key；
+3. 如果 key 进入 Git 历史，推送远程前必须清理历史（使用 `git-filter-repo`）；
+4. 即使历史清理成功，也必须轮换 key；
+5. 不允许在报告、日志、对话中展示 key 原文；
+6. 清理完成后必须运行 `check-no-secrets`、`check-forbidden-files` 和全历史 grep；
+7. 确认所有检查通过后才能推送远程。
