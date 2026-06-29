@@ -168,3 +168,19 @@ jobs:
         run: |
           python -m compileall backend/app backend/rag scripts tests -q
           echo "✅ Python compile check passed."
+
+  guardrails:
+    name: Agent Guardrails
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Check forbidden files
+        run: node scripts/check-forbidden-files.js
+
+      - name: Check for secrets
+        run: node scripts/check-no-secrets.js

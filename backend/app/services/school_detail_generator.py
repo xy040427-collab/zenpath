@@ -8,6 +8,7 @@ v2 changes:
   - Admission policies with full clause text
 """
 from __future__ import annotations
+import os
 
 import hashlib
 import json
@@ -25,7 +26,7 @@ logger = logging.getLogger(__name__)
 CACHE_DIR = Path(__file__).resolve().parents[3] / "rag_output" / "cache" / "schools"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-DEEPSEEK_API_KEY = "os.environ.get("DEEPSEEK_API_KEY", "")"
+DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1"
 DEEPSEEK_MODEL = "deepseek-v4-pro"
 
