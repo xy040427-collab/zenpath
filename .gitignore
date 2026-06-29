@@ -1,0 +1,116 @@
+# ── Environment & Secrets ──────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── Node.js ────────────────────────────────────────
+node_modules/
+frontend/node_modules/
+
+# ── Build Output ───────────────────────────────────
+dist/
+frontend/dist/
+
+# ── Python Cache ───────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ── Python Virtual Environments ────────────────────
+.venv/
+venv/
+env/
+
+# ── Databases (runtime data, not source) ───────────
+backend/*.db
+backend/*.db-*
+backend/app/*.db
+backend/app/*.db-*
+*backup*.db
+*backup*.db-*
+*.sqlite
+*.sqlite3
+
+# ── Generated Reports & PDFs ───────────────────────
+backend/generated/
+*.pdf
+*.pptx
+
+# ── RAG Output (auto-generated, 360MB+) ────────────
+rag_output/
+backend/rag_output/
+
+# ── Data (raw/crawled, 3.5GB, not source code) ─────
+data/
+
+# ── Exports (auto-generated RAG chunk exports) ─────
+exports/
+
+# ── Binary Task Documents (not versionable) ────────
+tasks/*.docx
+*.docx
+
+# ── Dyad Engine Output (auto-generated) ────────────
+dyad-output*/
+frontend/dyad-output*/
+dyad-prefs-output/
+ENGINE_LOG.json
+frontend/ENGINE_LOG.json
+frontend/backend/
+
+# ── Dyad Prompt Files (historical, not source code) ─
+dyad_*.md
+docs/dyad_*.md
+docs/dyad-*.md
+
+# ── Archive (historical backups, not active code) ──
+_archive/
+
+# ── Backup & Temp Files ────────────────────────────
+*.bak
+*.v1bak
+*.orig
+*.tmp
+*~
+*.backup.*
+
+# ── Logs ───────────────────────────────────────────
+*.log
+
+# ── Agent Reports (auto-generated per run) ─────────
+reports/agent-runs/
+
+# ── Playwright / E2E Artifacts ─────────────────────
+playwright-report/
+test-results/
+frontend/docs/qa/
+
+# ── OS ─────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── IDE ────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── Deploy Config (contains real server IPs/paths) ─
+zenpath-nginx.conf
+*.local.conf
+*.zip
+*.tar.gz
+*.7z
+*.rar
+
+# ── Frontend Reports (auto-generated matching data) ─
+frontend/reports/
+
+# ── Logo Assets (CDN-sourced, 174MB total, re-downloadable) ─
+frontend/public/logos/
+frontend/public/urongda-logos/
+assets/logos/

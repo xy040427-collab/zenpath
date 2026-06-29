@@ -1,0 +1,152 @@
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@300;400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Paper grain noise overlay */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.02;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  mix-blend-mode: multiply;
+}
+
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-weight: 350;
+  font-size: 1.125rem;
+  line-height: 1.8;
+  color: #4A4A4A;
+  background: #F5F0E8;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4 {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  color: #1A2E22;
+}
+
+::selection {
+  background-color: #1A2E22;
+  color: #F5F0E8;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+/* === Dark hero gradient section === */
+.gradient-hero {
+  background: linear-gradient(135deg, #1A2E22 0%, #2D4A3E 50%, #1A2E22 100%);
+  position: relative;
+}
+
+.gradient-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 70% 50% at 0% 20%, rgba(196,164,92,0.06), transparent 60%);
+  pointer-events: none;
+}
+
+.gradient-hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 40% 60% at 100% 80%, rgba(196,164,92,0.04), transparent 50%);
+  pointer-events: none;
+}
+
+/* === Card premium === */
+.card-premium {
+  background: #FFFFFF;
+  border: 1px solid #E0D8CC;
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(26,46,34,0.04);
+  transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.4s ease, border-color 0.4s ease;
+}
+
+.card-premium:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 40px rgba(26,46,34,0.08);
+  border-color: #D4CCC0;
+}
+
+/* === Dark section === */
+.dark-section {
+  background: #1A2E22;
+  position: relative;
+}
+
+/* === Gold accent section === */
+.gold-section {
+  background: #F0EAE0;
+  position: relative;
+}
+
+/* === Skeleton shimmer === */
+.skeleton {
+  background: linear-gradient(90deg, #EDE6D8 25%, #E0D8CC 50%, #EDE6D8 75%);
+  background-size: 200% 100%;
+  animation: shimmer 2s linear infinite;
+  border-radius: 8px;
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* === Gold pulse keyframe === */
+@keyframes pulse-gold {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(196,164,92,0.3); }
+  50% { box-shadow: 0 0 0 12px rgba(196,164,92,0); }
+}
+
+/* === Slide animations for accordion === */
+@keyframes slideDown {
+  from { height: 0; opacity: 0; }
+  to { height: var(--radix-accordion-content-height); opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { height: var(--radix-accordion-content-height); opacity: 1; }
+  to { height: 0; opacity: 0; }
+}
+
+.accordion-content {
+  overflow: hidden;
+}
+
+.accordion-content[data-state="open"] {
+  animation: slideDown 0.3s ease-out;
+}
+
+.accordion-content[data-state="closed"] {
+  animation: slideUp 0.3s ease-out;
+}
+
+/* === Floating animation for logo === */
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-3px); }
+}
+
+/* === Count-up number style === */
+.stat-number {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-weight: 300;
+  letter-spacing: -0.02em;
+}
+
+/* === Scrollbar === */
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: #F0EAE0; }
+::-webkit-scrollbar-thumb { background: #C2B8A8; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #A09888; }
