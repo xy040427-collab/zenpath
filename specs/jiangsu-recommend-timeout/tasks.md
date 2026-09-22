@@ -6,4 +6,3 @@
 - [x] Test concurrent writes and AI timeout using an isolated temporary database.
 - [x] Build frontend.
 - [x] Verify final live recommendation and saved report after retiring stale server.
-
