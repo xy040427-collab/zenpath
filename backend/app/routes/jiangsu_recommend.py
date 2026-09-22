@@ -11,7 +11,11 @@ POST /api/gaokao/jiangsu/recommend — 江苏院校专业组推荐 v2
 - 所有推荐可溯源 source_url
 """
 
+import asyncio
+import json
 import logging
+from pathlib import Path
+from functools import lru_cache
 import math
 import re
 from collections import defaultdict
@@ -1184,19 +1188,16 @@ def _get_membership_controls(user_id: str) -> dict:
 #  RAG evidence batch checker (lazy-loaded retriever)
 # ═══════════════════════════════════════════
 
-_rag_retriever = None
-
-
-def _get_rag_retriever():
-    global _rag_retriever
-    if _rag_retriever is None:
-        try:
-            from rag.retrieval.chsi_vector_retriever import ChsiVectorRetriever
-            _rag_retriever = ChsiVectorRetriever()
-        except Exception as e:
-            logger.warning(f"Failed to load RAG retriever: {e}")
-            _rag_retriever = False
-    return _rag_retriever if _rag_retriever is not False else None
+@lru_cache(maxsize=1)
+def _get_rag_docstore():
+    # Availability checks need document metadata, not embeddings or a model.
+    path = Path(__file__).resolve().parents[3] / "rag_output/chsi/export/vector_store/faiss/docstore.jsonl"
+    try:
+        with path.open(encoding="utf8") as source:
+            return [json.loads(line) for line in source if line.strip()]
+    except (OSError, ValueError):
+        logger.warning("RAG document metadata unavailable")
+        return []
 
 
 def _get_rag_evidence_batch(recommendations: dict) -> dict:
@@ -1217,9 +1218,7 @@ def _get_rag_evidence_batch(recommendations: dict) -> dict:
     if not schools:
         return {}
 
-    retriever = _get_rag_retriever()
-    if retriever is None:
-        return {}
+    docstore = _get_rag_docstore()
 
     result: dict = {}
     for school in schools:
@@ -1230,7 +1229,7 @@ def _get_rag_evidence_batch(recommendations: dict) -> dict:
             "sources": [],
         }
 
-    for row in retriever.docstore:
+    for row in docstore:
         meta = row.get("metadata") or {}
         school = meta.get("school_name", "")
         if school not in schools:
@@ -1277,54 +1276,6 @@ async def _save_jiangsu_report(
 
     try:
         now = datetime.utcnow()
-
-        # ── 1. Ensure a default session exists ──
-        session_id = "jiangsu_default"
-        existing = await db.execute(
-            sa_text("SELECT id FROM sessions WHERE id = :sid"),
-            {"sid": session_id},
-        )
-        if not existing.fetchone():
-            await db.execute(
-                sa_text(
-                    "INSERT INTO sessions (id, session_token, source, created_at, expires_at) "
-                    "VALUES (:id, :token, :source, :created, :expires)"
-                ),
-                {
-                    "id": session_id,
-                    "token": f"jiangsu_{uuid.uuid4().hex[:16]}",
-                    "source": "jiangsu_recommend",
-                    "created": now,
-                    "expires": now + timedelta(days=365),
-                },
-            )
-
-        # ── 2. Create Application ──
-        app_id = uuid.uuid4().hex[:22]
-        await db.execute(
-            sa_text(
-                "INSERT INTO applications (id, session_id, status, province, year, "
-                "subject_type, score, rank, priority, preferred_cities, preferred_major_categories, "
-                "created_at, updated_at) "
-                "VALUES (:id, :sid, :status, :province, :year, :subj, :score, :rank, "
-                ":priority, :cities, :majors, :created, :updated)"
-            ),
-            {
-                "id": app_id,
-                "sid": session_id,
-                "status": "completed",
-                "province": "江苏",
-                "year": request_body.year,
-                "subj": subj,
-                "score": score,
-                "rank": user_rank,
-                "priority": request_body.strategy or "balanced",
-                "cities": _json.dumps(request_body.preferred_cities or []),
-                "majors": _json.dumps(request_body.preferred_majors or []),
-                "created": now,
-                "updated": now,
-            },
-        )
 
         # ── 3. Map Jiangsu items → generic format ──
         def map_item(item: dict, bucket_label: str) -> dict:
@@ -1379,27 +1330,6 @@ async def _save_jiangsu_report(
             "rank_source": rank_source,
         }
 
-        # ── 4. Create RecommendationResult ──
-        rec_id = uuid.uuid4().hex[:22]
-        await db.execute(
-            sa_text(
-                "INSERT INTO recommendation_results (id, application_id, summary_data, "
-                "recommendations, tier_distribution, created_at) "
-                "VALUES (:id, :app_id, :summary, :recs, :tiers, :created)"
-            ),
-            {
-                "id": rec_id,
-                "app_id": app_id,
-                "summary": _json.dumps(summary_data),
-                "recs": _json.dumps(all_items),
-                "tiers": _json.dumps({
-                    "冲": len(rush), "稳": len(stable),
-                    "保": len(safe), "垫": len(pad),
-                }),
-                "created": now,
-            },
-        )
-
         # ── 5. Build Report JSON & save ──
         recommendation_data = {
             "summary": summary_data,
@@ -1445,8 +1375,11 @@ async def _save_jiangsu_report(
                 "region_preference": getattr(app, "region_preference", "") or "",
             }
 
-            ai_result = await generate_ai_narratives(
-                user_info, recommendation_data, evidence_map
+            # Release the read transaction before waiting for external services.
+            await db.rollback()
+            ai_result = await asyncio.wait_for(
+                generate_ai_narratives(user_info, recommendation_data, evidence_map),
+                timeout=20.0,
             )
 
             # Merge AI narratives into report JSON
@@ -1460,8 +1393,86 @@ async def _save_jiangsu_report(
                 logger.info(
                     f"AI content generated: {len(ai_result.get('school_deep_dives', []))} school deep dives"
                 )
+        except asyncio.TimeoutError:
+            report_json["ai_generation_status"] = "timeout"
+            logger.warning("AI supplement exceeded 20s; retaining the data-based report")
         except Exception as ai_err:
             logger.warning(f"AI content generation failed (report will still be saved): {ai_err}")
+
+        # Begin a short write-only transaction after all slow enrichment.
+        # End the previous read snapshot, then serialize SQLite writers before
+        # checking the shared default session (prevents read-to-write races).
+        await db.rollback()
+        if db.get_bind().dialect.name == "sqlite":
+            await db.execute(sa_text("BEGIN IMMEDIATE"))
+        # ── 1. Ensure a default session exists ──
+        session_id = "jiangsu_default"
+        existing = await db.execute(
+            sa_text("SELECT id FROM sessions WHERE id = :sid"),
+            {"sid": session_id},
+        )
+        if not existing.fetchone():
+            await db.execute(
+                sa_text(
+                    "INSERT INTO sessions (id, session_token, source, created_at, expires_at) "
+                    "VALUES (:id, :token, :source, :created, :expires)"
+                ),
+                {
+                    "id": session_id,
+                    "token": f"jiangsu_{uuid.uuid4().hex[:16]}",
+                    "source": "jiangsu_recommend",
+                    "created": now,
+                    "expires": now + timedelta(days=365),
+                },
+            )
+
+        # ── 2. Create Application ──
+        app_id = uuid.uuid4().hex[:22]
+        await db.execute(
+            sa_text(
+                "INSERT INTO applications (id, session_id, status, province, year, "
+                "subject_type, score, rank, priority, preferred_cities, preferred_major_categories, "
+                "created_at, updated_at) "
+                "VALUES (:id, :sid, :status, :province, :year, :subj, :score, :rank, "
+                ":priority, :cities, :majors, :created, :updated)"
+            ),
+            {
+                "id": app_id,
+                "sid": session_id,
+                "status": "completed",
+                "province": "江苏",
+                "year": request_body.year,
+                "subj": subj,
+                "score": score,
+                "rank": user_rank,
+                "priority": request_body.strategy or "balanced",
+                "cities": _json.dumps(request_body.preferred_cities or []),
+                "majors": _json.dumps(request_body.preferred_majors or []),
+                "created": now,
+                "updated": now,
+            },
+        )
+
+        # ── 4. Create RecommendationResult ──
+        rec_id = uuid.uuid4().hex[:22]
+        await db.execute(
+            sa_text(
+                "INSERT INTO recommendation_results (id, application_id, summary_data, "
+                "recommendations, tier_distribution, created_at) "
+                "VALUES (:id, :app_id, :summary, :recs, :tiers, :created)"
+            ),
+            {
+                "id": rec_id,
+                "app_id": app_id,
+                "summary": _json.dumps(summary_data),
+                "recs": _json.dumps(all_items),
+                "tiers": _json.dumps({
+                    "冲": len(rush), "稳": len(stable),
+                    "保": len(safe), "垫": len(pad),
+                }),
+                "created": now,
+            },
+        )
 
         report_id = uuid.uuid4().hex[:22]
         await db.execute(

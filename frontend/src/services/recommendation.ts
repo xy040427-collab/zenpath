@@ -165,7 +165,9 @@ export async function getSchoolDetail(id: string): Promise<School> {
 import axios from 'axios';
 import type { JiangsuRecommendResponse } from '../types';
 
-export async function getJiangsuRecommendations(params: {
+const pendingJiangsu = new Map<string, Promise<JiangsuRecommendResponse>>();
+
+export function getJiangsuRecommendations(params: {
   year: number;
   subject_type: string;
   score: number;
@@ -177,11 +179,15 @@ export async function getJiangsuRecommendations(params: {
   strategy: string;
   top_n: number;
 }): Promise<JiangsuRecommendResponse> {
-  // Uses /api prefix (not /api/v1) — proxy handles forwarding to backend
-  const { data } = await axios.post<JiangsuRecommendResponse>(
-    '/api/gaokao/jiangsu/recommend',
-    params,
-    { headers: { 'Content-Type': 'application/json' }, timeout: 30000 },
-  );
-  return data;
+  // Share only in-flight identical requests (React StrictMode mounts twice).
+  // Completed responses are not cached; a later deliberate retry is fresh.
+  const key = JSON.stringify(params);
+  const existing = pendingJiangsu.get(key);
+  if (existing) return existing;
+  const request = axios.post<JiangsuRecommendResponse>(
+    '/api/gaokao/jiangsu/recommend', params,
+    { headers: { 'Content-Type': 'application/json' }, timeout: 60000 },
+  ).then(({ data }) => data).finally(() => pendingJiangsu.delete(key));
+  pendingJiangsu.set(key, request);
+  return request;
 }
